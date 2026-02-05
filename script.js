@@ -54,65 +54,153 @@ window.resetTTT=function(){
 
 drawTTT();
 
-// ---------- CHESS (SIMPLE, HARD, PLAYABLE) ----------
-const start=[
-["r","n","b","q","k","b","n","r"],
-["p","p","p","p","p","p","p","p"],
-["","","","","","","",""],
-["","","","","","","",""],
-["","","","","","","",""],
-["","","","","","","",""],
-["P","P","P","P","P","P","P","P"],
-["R","N","B","Q","K","B","N","R"]
-];
-let board=JSON.parse(JSON.stringify(start));
-let sel=null;
+// ================= CHESS GAME (UPDATED & SMOOTH) =================
 
-function drawChess(){
-  const b=document.getElementById("chess-board");
-  b.innerHTML="";
-  for(let r=0;r<8;r++){
-    for(let c=0;c<8;c++){
-      let d=document.createElement("div");
-      d.className="chess-cell "+((r+c)%2?"black":"white");
-      d.textContent=board[r][c];
-      d.onclick=()=>clickChess(r,c);
-      b.appendChild(d);
+// Chess symbols
+const pieces = {
+  "P":"♙","R":"♖","N":"♘","B":"♗","Q":"♕","K":"♔",
+  "p":"♟","r":"♜","n":"♞","b":"♝","q":"♛","k":"♚",
+  "":""
+};
+
+// Initial board
+const startBoard = [
+ ["r","n","b","q","k","b","n","r"],
+ ["p","p","p","p","p","p","p","p"],
+ ["","","","","","","",""],
+ ["","","","","","","",""],
+ ["","","","","","","",""],
+ ["","","","","","","",""],
+ ["P","P","P","P","P","P","P","P"],
+ ["R","N","B","Q","K","B","N","R"]
+];
+
+let board = JSON.parse(JSON.stringify(startBoard));
+let selected = null;
+let aiThinking = false;
+
+// Draw board
+function drawChess() {
+  const el = document.getElementById("chess-board");
+  if (!el) return;
+
+  el.innerHTML = "";
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const cell = document.createElement("div");
+      cell.className = "chess-cell " + ((r + c) % 2 ? "black" : "white");
+      cell.textContent = pieces[board[r][c]];
+      cell.onclick = () => clickChess(r, c);
+      el.appendChild(cell);
     }
   }
 }
 
-function clickChess(r,c){
-  if(sel){
-    let [sr,sc]=sel;
-    board[r][c]=board[sr][sc];
-    board[sr][sc]="";
-    sel=null;
-    drawChess();
-    setTimeout(aiChess,300);
-  } else if(board[r][c]===board[r][c].toUpperCase()){
-    sel=[r,c];
+// Player click
+function clickChess(r, c) {
+  if (aiThinking) return;
+
+  if (selected) {
+    const [sr, sc] = selected;
+    if (isValidMove(board[sr][sc], sr, sc, r, c)) {
+      board[r][c] = board[sr][sc];
+      board[sr][sc] = "";
+      selected = null;
+      drawChess();
+
+      aiThinking = true;
+      setTimeout(() => {
+        chessAI();
+        aiThinking = false;
+      }, 350);
+    } else {
+      selected = null;
+    }
+  } 
+  else if (board[r][c] && board[r][c] === board[r][c].toUpperCase()) {
+    selected = [r, c];
   }
 }
 
-function aiChess(){
-  let moves=[];
-  for(let r=0;r<8;r++)
-    for(let c=0;c<8;c++)
-      if(board[r][c]===board[r][c].toLowerCase()){
-        if(r+1<8) moves.push([[r,c],[r+1,c]]);
+// Move rules (simple but correct-feeling)
+function isValidMove(p, sr, sc, r, c) {
+  if (board[r][c] && board[r][c] === board[r][c].toUpperCase()) return false;
+
+  const dr = r - sr;
+  const dc = c - sc;
+
+  switch (p) {
+    case "P": return dr === -1 && dc === 0 && !board[r][c];
+    case "R": return dr === 0 || dc === 0;
+    case "B": return Math.abs(dr) === Math.abs(dc);
+    case "Q": return dr === 0 || dc === 0 || Math.abs(dr) === Math.abs(dc);
+    case "N": return (Math.abs(dr) === 2 && Math.abs(dc) === 1) ||
+                       (Math.abs(dr) === 1 && Math.abs(dc) === 2);
+    case "K": return Math.abs(dr) <= 1 && Math.abs(dc) <= 1;
+  }
+  return false;
+}
+
+// AI logic (smart but beatable)
+function chessAI() {
+  let moves = [];
+
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const p = board[r][c];
+      if (p && p === p.toLowerCase()) {
+        for (let nr = 0; nr < 8; nr++) {
+          for (let nc = 0; nc < 8; nc++) {
+            if (isValidAIMove(p, r, c, nr, nc)) {
+              let score = 0;
+              if (board[nr][nc]) score += 5;       // capture
+              if ([3,4].includes(nr) && [3,4].includes(nc)) score += 2; // center
+              moves.push({from:[r,c], to:[nr,nc], score});
+            }
+          }
+        }
       }
-  let m=moves[Math.floor(Math.random()*moves.length)];
-  board[m[1][0]][m[1][1]]=board[m[0][0]][m[0][1]];
-  board[m[0][0]][m[0][1]]="";
+    }
+  }
+
+  if (!moves.length) return;
+
+  moves.sort((a,b)=>b.score-a.score);
+  const best = moves.slice(0, 4);
+  const m = best[Math.floor(Math.random()*best.length)];
+
+  board[m.to[0]][m.to[1]] = board[m.from[0]][m.from[1]];
+  board[m.from[0]][m.from[1]] = "";
   drawChess();
 }
 
-window.resetChess=function(){
-  board=JSON.parse(JSON.stringify(start));
-  drawChess();
-};
+function isValidAIMove(p, sr, sc, r, c) {
+  if (board[r][c] && board[r][c] === board[r][c].toLowerCase()) return false;
 
+  const dr = r - sr;
+  const dc = c - sc;
+
+  switch (p) {
+    case "p": return dr === 1 && dc === 0;
+    case "r": return dr === 0 || dc === 0;
+    case "b": return Math.abs(dr) === Math.abs(dc);
+    case "q": return dr === 0 || dc === 0 || Math.abs(dr) === Math.abs(dc);
+    case "n": return (Math.abs(dr) === 2 && Math.abs(dc) === 1) ||
+                       (Math.abs(dr) === 1 && Math.abs(dc) === 2);
+    case "k": return Math.abs(dr) <= 1 && Math.abs(dc) <= 1;
+  }
+  return false;
+}
+
+// Reset
+function resetChess() {
+  board = JSON.parse(JSON.stringify(startBoard));
+  selected = null;
+  aiThinking = false;
+  drawChess();
+}
+
+// Start
 drawChess();
 
 // ---------- QUIZ (EASY + HARD) ----------
